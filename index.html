@@ -908,6 +908,144 @@
             color: #999;
             font-style: italic;
         }
+        
+        /* ==========================================
+           POPUP DE VALIDATION DES PANNES DÉTECTÉES
+           ========================================== */
+        .panne-popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.3s;
+        }
+        
+        .panne-popup-content {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            max-width: 90%;
+            width: 450px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            animation: fadeInSlide 0.4s;
+        }
+        
+        .panne-popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--repa-orange);
+        }
+        
+        .panne-popup-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: var(--repa-orange);
+        }
+        
+        .panne-counter {
+            background: var(--repa-orange);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .panne-description {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 1em;
+            line-height: 1.5;
+            color: #333;
+            border-left: 4px solid var(--repa-orange);
+        }
+        
+        .panne-photo-preview {
+            margin: 15px 0;
+            text-align: center;
+        }
+        
+        .panne-photo-preview img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .panne-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .btn-panne-photo {
+            background: linear-gradient(135deg, #546e7a, #37474f);
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        
+        .btn-panne-photo:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-panne-validate {
+            background: linear-gradient(135deg, #4CAF50, #388E3C);
+            color: white;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-panne-validate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .btn-panne-reject {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-panne-reject:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(244, 67, 54, 0.4);
+        }
 
         /* ANIMATIONS KEYFRAMES */
         @keyframes fadeIn { 
@@ -3164,6 +3302,136 @@
         }
     }
     
+    
+    // ==========================================
+    // 🔧 SYSTÈME DE POPUP POUR LES PANNES
+    // ==========================================
+    
+    // Variables globales pour gérer les pannes détectées
+    let detectedPannes = [];
+    let currentPanneIndex = 0;
+    let currentPannePhoto = null;
+    
+    /**
+     * Affiche les popups pour valider chaque panne une par une
+     */
+    function showPannesPopup(pannes) {
+        detectedPannes = pannes;
+        currentPanneIndex = 0;
+        currentPannePhoto = null;
+        
+        // Cache le loader du scan
+        document.getElementById('scan-loading').style.display = 'none';
+        
+        // Affiche la première panne
+        showNextPanne();
+    }
+    
+    /**
+     * Affiche la panne suivante dans la popup
+     */
+    function showNextPanne() {
+        if (currentPanneIndex >= detectedPannes.length) {
+            // Toutes les pannes ont été traitées
+            document.getElementById('panne-popup').style.display = 'none';
+            alert(`✅ TERMINÉ !\n\n${detectedPannes.length} panne(s) traitée(s).`);
+            
+            // Recharge le fil de réparation pour afficher les nouvelles pannes
+            loadReparationFeed();
+            updateBadges();
+            return;
+        }
+        
+        const panne = detectedPannes[currentPanneIndex];
+        
+        // Met à jour le contenu de la popup
+        document.getElementById('panne-description').innerText = panne.description;
+        document.getElementById('panne-counter').innerText = `${currentPanneIndex + 1} / ${detectedPannes.length}`;
+        
+        // Reset la photo
+        currentPannePhoto = null;
+        document.getElementById('panne-photo-preview').style.display = 'none';
+        document.getElementById('panne-photo-input').value = '';
+        
+        // Affiche la popup
+        document.getElementById('panne-popup').style.display = 'flex';
+    }
+    
+    /**
+     * Gère l'ajout d'une photo pour la panne actuelle
+     */
+    function handlePannePhoto() {
+        const file = document.getElementById('panne-photo-input').files[0];
+        
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            currentPannePhoto = e.target.result;
+            
+            // Affiche la preview
+            document.getElementById('panne-photo-img').src = currentPannePhoto;
+            document.getElementById('panne-photo-preview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    /**
+     * Valide et enregistre la panne actuelle dans Firebase
+     */
+    async function validateCurrentPanne() {
+        const panne = detectedPannes[currentPanneIndex];
+        
+        console.log("✅ Validation de la panne:", panne.description);
+        
+        try {
+            // Récupère l'utilisateur actuel
+            const technicien = localStorage.getItem('c2mi_current_user') || "Inconnu";
+            
+            // Prépare les photos (array avec la photo si elle existe)
+            const photos = currentPannePhoto ? [currentPannePhoto] : [];
+            
+            // Enregistre dans Firebase
+            await db.collection("depannages").add({
+                machine: currentMachine,
+                technicien: technicien,
+                date: new Date().toISOString(),
+                comment: "🤖 [SCAN AUTO]\n" + panne.description,
+                photos: photos,
+                active: true
+            });
+            
+            // Envoie la notification email
+            envoyerNotificationPanne(
+                currentMachine,
+                technicien,
+                panne.description,
+                photos.length
+            );
+            
+            console.log("✅ Panne enregistrée avec succès");
+            
+            // Passe à la panne suivante
+            currentPanneIndex++;
+            showNextPanne();
+            
+        } catch (error) {
+            console.error("❌ Erreur lors de l'enregistrement:", error);
+            alert("❌ Erreur lors de l'enregistrement !\n\n" + error.message);
+        }
+    }
+    
+    /**
+     * Ignore la panne actuelle et passe à la suivante
+     */
+    function rejectCurrentPanne() {
+        console.log("❌ Panne ignorée:", detectedPannes[currentPanneIndex].description);
+        
+        // Passe à la panne suivante
+        currentPanneIndex++;
+        showNextPanne();
+    }
+    
     /**
      * Fonction d'initialisation de l'application
      * Cette fonction est appelée automatiquement quand la page se charge
@@ -3225,7 +3493,7 @@
             return;
         }
         
-        console.log("📸 Analyse de la feuille de prévisite...");
+        console.log("📸 Analyse de la feuille:", file.name, "Type:", file.type, "Taille:", (file.size / 1024).toFixed(2) + "KB");
         
         // 1. On montre le loader pendant l'analyse
         document.getElementById('scan-loading').style.display = 'block';
@@ -3236,31 +3504,34 @@
         
         reader.onload = async function() {
             try {
+                // On récupère le type MIME depuis le fichier (image/jpeg, image/png, etc.)
+                const mimeType = file.type || "image/jpeg";
+                
                 // On enlève l'en-tête "data:image/jpeg;base64," pour garder juste les données
                 const base64Image = reader.result.split(',')[1];
                 
+                console.log("📦 Image convertie en base64, type MIME:", mimeType);
+                console.log("📏 Taille base64:", (base64Image.length / 1024).toFixed(2) + "KB");
+                
                 // 3. Configuration de l'API Gemini
                 const API_KEY = "AIzaSyAZqibbldEwp9AvmGGl4YhOBgfiKRyPEiY";
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
                 
                 // 4. On prépare le message pour l'IA
-                // On lui demande d'analyser la feuille SNCF et extraire les infos importantes
                 const payload = {
                     contents: [{
                         parts: [
                             { 
-                                text: "Tu analyses une feuille de prévisite SNCF pour maintenance ferroviaire. " +
-                                      "Extrait les informations suivantes si présentes : " +
-                                      "- Type de panne (Fuite, Moteur, Hydraulique, Électrique, etc.) " +
-                                      "- Description détaillée du problème " +
-                                      "- Pièces mentionnées ou à remplacer " +
-                                      "- Toute autre information importante " +
-                                      "Réponds de manière concise et structurée, SANS dire 'voici' ou 'voici le problème'. " +
-                                      "Si la feuille n'est pas une prévisite SNCF, dis-le."
+                                text: "Analyse cette feuille de prévisite SNCF de maintenance ferroviaire. " +
+                                      "Extrais TOUTES les pannes mentionnées et renvoie-les sous forme de JSON pur (sans markdown, sans ```json). " +
+                                      "Format attendu: " +
+                                      '{"pannes": [{"description": "Description concise de la panne 1"}, {"description": "Description de la panne 2"}]} ' +
+                                      "Si plusieurs problèmes sont listés, crée une entrée pour chacun. " +
+                                      "Si aucune panne n'est détectable, renvoie : {\"pannes\": []}"
                             },
                             { 
                                 inline_data: { 
-                                    mime_type: "image/jpeg", 
+                                    mime_type: mimeType,
                                     data: base64Image 
                                 } 
                             }
@@ -3276,37 +3547,74 @@
                     body: JSON.stringify(payload)
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`Erreur API: ${response.status} ${response.statusText}`);
-                }
+                console.log("📡 Réponse HTTP:", response.status, response.statusText);
                 
+                // On récupère la réponse complète (même en cas d'erreur)
                 const data = await response.json();
-                console.log("✅ Réponse reçue de l'IA");
+                console.log("📄 Données reçues:", data);
+                
+                if (!response.ok) {
+                    // Si l'API retourne une erreur, on affiche le détail
+                    const errorMsg = data.error?.message || JSON.stringify(data);
+                    throw new Error(`Erreur API ${response.status}: ${errorMsg}`);
+                }
                 
                 // 6. On récupère le texte analysé par l'IA
                 if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                    const textIA = data.candidates[0].content.parts[0].text;
+                    let textIA = data.candidates[0].content.parts[0].text;
                     
-                    // 7. On remplit automatiquement le champ commentaire !
-                    const commentField = document.getElementById('repaComment');
-                    commentField.value = "🤖 [SCAN AUTO]\n" + textIA.trim();
+                    console.log("✅ Texte brut reçu:", textIA);
                     
-                    // Petit effet visuel pour montrer que ça a marché
-                    commentField.style.backgroundColor = "#e8f5e9";
-                    setTimeout(() => {
-                        commentField.style.backgroundColor = "";
-                    }, 2000);
+                    // Nettoie le texte (enlève les ```json si présents)
+                    textIA = textIA.replace(/```json/g, '').replace(/```/g, '').trim();
                     
-                    alert("✅ Analyse terminée !\n\nVérifie et complète si besoin.");
-                    console.log("📝 Texte extrait:", textIA);
+                    try {
+                        // Parse le JSON
+                        const result = JSON.parse(textIA);
+                        
+                        if (!result.pannes || result.pannes.length === 0) {
+                            alert("❌ Aucune panne détectée sur cette feuille !\n\nEssaie avec une photo plus nette ou une vraie feuille de prévisite.");
+                            return;
+                        }
+                        
+                        console.log(`✅ ${result.pannes.length} panne(s) détectée(s)`);
+                        
+                        // Lance le système de popup pour valider chaque panne
+                        showPannesPopup(result.pannes);
+                        
+                    } catch (parseError) {
+                        console.error("❌ Erreur parsing JSON:", parseError);
+                        console.log("Texte brut qui a causé l'erreur:", textIA);
+                        
+                        // Fallback: on met tout le texte dans le champ comme avant
+                        const commentField = document.getElementById('repaComment');
+                        commentField.value = "🤖 [SCAN AUTO]\n" + textIA;
+                        commentField.style.backgroundColor = "#e8f5e9";
+                        setTimeout(() => { commentField.style.backgroundColor = ""; }, 2000);
+                        
+                        alert("⚠️ L'IA n'a pas renvoyé un format structuré.\n\nJ'ai mis le texte brut dans le champ, vérifie et complète !");
+                    }
                     
                 } else {
-                    throw new Error("Pas de réponse valide de l'IA");
+                    console.error("❌ Réponse inattendue:", data);
+                    throw new Error("L'IA n'a pas renvoyé de texte. Réessaie avec une photo plus nette.");
                 }
                 
             } catch (error) {
-                console.error("❌ Erreur lors de l'analyse:", error);
-                alert("❌ ERREUR !\n\n" + error.message + "\n\nVérifie ta connexion ou réessaie.");
+                console.error("❌ ERREUR COMPLÈTE:", error);
+                
+                // Message d'erreur détaillé pour débugger
+                let errorMsg = "ERREUR : " + error.message;
+                
+                if (error.message.includes("403")) {
+                    errorMsg += "\n\n💡 Ta clé API n'a peut-être pas les permissions. Vérifie sur aistudio.google.com";
+                } else if (error.message.includes("429")) {
+                    errorMsg += "\n\n💡 Quota dépassé. Attends un peu ou crée une nouvelle clé.";
+                } else if (error.message.includes("400")) {
+                    errorMsg += "\n\n💡 Image trop lourde ou format invalide. Essaie une photo plus petite.";
+                }
+                
+                alert("❌ " + errorMsg);
             } finally {
                 // On cache le loader dans tous les cas
                 document.getElementById('scan-loading').style.display = 'none';
@@ -3326,5 +3634,42 @@
     // Cette ligne s'exécute immédiatement quand le script est lu par le navigateur
     initializeApp();
 </script>
+
+<!-- ==========================================
+     POPUP DE VALIDATION DES PANNES
+     ========================================== -->
+<div id="panne-popup" class="panne-popup-overlay">
+    <div class="panne-popup-content">
+        <div class="panne-popup-header">
+            <div class="panne-popup-title">🔧 PANNE DÉTECTÉE</div>
+            <div class="panne-counter" id="panne-counter">1 / 1</div>
+        </div>
+        
+        <div class="panne-description" id="panne-description">
+            Description de la panne...
+        </div>
+        
+        <div class="panne-photo-preview" id="panne-photo-preview" style="display:none;">
+            <img id="panne-photo-img" src="" alt="Photo de la panne">
+        </div>
+        
+        <input type="file" id="panne-photo-input" accept="image/*" style="display:none;" onchange="handlePannePhoto()">
+        
+        <div class="panne-actions">
+            <button class="btn-panne-photo" onclick="document.getElementById('panne-photo-input').click()">
+                📸 AJOUTER UNE PHOTO (OPTIONNEL)
+            </button>
+            
+            <button class="btn-panne-validate" onclick="validateCurrentPanne()">
+                ✅ VALIDER ET ENREGISTRER
+            </button>
+            
+            <button class="btn-panne-reject" onclick="rejectCurrentPanne()">
+                ❌ IGNORER CETTE PANNE
+            </button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
