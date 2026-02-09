@@ -95,6 +95,13 @@
             text-shadow: 1px 1px 2px rgba(0,0,0,0.3); 
         }
         
+        .btn-stock { 
+            background: linear-gradient(135deg, #4CAF50, #388E3C); 
+            color: white; 
+            text-transform: uppercase; 
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3); 
+        }
+        
         .btn-secondary { 
             background: white; 
             color: var(--sncf-grey); 
@@ -1198,6 +1205,7 @@
         </div>
         <button class="btn-menu btn-action" onclick="goToScreen('MenuEngins')">🚜 GESTION ENGINS (RELEVÉS/PANNES)</button>
         <button id="btn-pieces-main" class="btn-menu btn-pieces" onclick="goToScreen('MenuPieces')">📦 COMMANDE PIÈCES</button>
+        <button class="btn-menu btn-stock" onclick="window.open('https://stockv2-beta.vercel.app/', '_blank')">📊 STOCK</button>
     </div>
 
     <div id="screenMenuEngins" class="screen">
