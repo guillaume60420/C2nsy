@@ -1403,13 +1403,13 @@
         
         <!-- SCANNER FEUILLE PRÉVISITE -->
         <div class="card" style="background: #e3f2fd; border: 2px dashed #2196f3; margin-bottom:15px;">
-            <h3 style="color:#1565c0; margin-top:0;">🤖 SCANNER FEUILLE PRÉVISITE</h3>
-            <p style="font-size:0.85em; color:#555; margin-bottom:10px;">Prends une photo ou choisis depuis ta galerie, l'IA va remplir la panne automatiquement.</p>
+            <h3 style="color:#1565c0; margin-top:0;">🤖 SCANNER FEUILLE(S) PRÉVISITE</h3>
+            <p style="font-size:0.85em; color:#555; margin-bottom:10px;">Choisis plusieurs photos OU un PDF, l'IA va analyser toutes les pannes en 1 seul scan !</p>
             
-            <input type="file" id="scanInput" accept="image/*" style="display:none;" onchange="analyzePrevisite()">
+            <input type="file" id="scanInput" accept="image/*,application/pdf" multiple style="display:none;" onchange="analyzePrevisite()">
             
             <button class="btn-menu" onclick="document.getElementById('scanInput').click()" style="background: linear-gradient(135deg, #2196f3, #0d47a1); color: white;">
-                📸 PHOTO / GALERIE
+                📸 PHOTOS / PDF (MULTI-SÉLECTION)
             </button>
             <div id="scan-loading" style="display:none; text-align:center; font-weight:bold; color:#1565c0; margin-top:10px; padding:10px; background:rgba(33,150,243,0.1); border-radius:8px;">
                 ⏳ Analyse en cours par l'IA... Patiente Pélo !
@@ -3481,153 +3481,182 @@
     // 🤖 FONCTION IA : ANALYSE DE PRÉVISITE
     // ==========================================
     /**
-     * Cette fonction utilise l'API Google Gemini pour analyser une photo de feuille de prévisite
+     * Cette fonction utilise l'API Google Gemini pour analyser une ou plusieurs photos/PDFs de feuilles de prévisite
      * et extraire automatiquement les informations sur les pannes
+     * ASTUCE : En envoyant plusieurs fichiers d'un coup, on économise des requêtes API !
      */
     async function analyzePrevisite() {
         const fileInput = document.getElementById('scanInput');
-        const file = fileInput.files[0];
+        const files = Array.from(fileInput.files);
         
-        if (!file) {
+        if (files.length === 0) {
             console.log("❌ Aucun fichier sélectionné");
             return;
         }
         
-        console.log("📸 Analyse de la feuille:", file.name, "Type:", file.type, "Taille:", (file.size / 1024).toFixed(2) + "KB");
+        console.log(`📸 Analyse de ${files.length} fichier(s)...`);
+        files.forEach((file, i) => {
+            console.log(`  ${i+1}. ${file.name} (${file.type}, ${(file.size / 1024).toFixed(2)}KB)`);
+        });
         
         // 1. On montre le loader pendant l'analyse
         document.getElementById('scan-loading').style.display = 'block';
+        document.getElementById('scan-loading').innerHTML = `⏳ Analyse de ${files.length} fichier(s) en cours...<br>Patiente Pélo, ça peut prendre quelques secondes !`;
         
-        // 2. On convertit l'image en Base64 (format texte que l'API comprend)
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        
-        reader.onload = async function() {
-            try {
-                // On récupère le type MIME depuis le fichier (image/jpeg, image/png, etc.)
-                const mimeType = file.type || "image/jpeg";
-                
-                // On enlève l'en-tête "data:image/jpeg;base64," pour garder juste les données
-                const base64Image = reader.result.split(',')[1];
-                
-                console.log("📦 Image convertie en base64, type MIME:", mimeType);
-                console.log("📏 Taille base64:", (base64Image.length / 1024).toFixed(2) + "KB");
-                
-                // 3. Configuration de l'API Gemini
-                const API_KEY = "AIzaSyAZqibbldEwp9AvmGGl4YhOBgfiKRyPEiY";
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
-                
-                // 4. On prépare le message pour l'IA
-                const payload = {
-                    contents: [{
-                        parts: [
-                            { 
-                                text: "Analyse cette feuille de prévisite SNCF de maintenance ferroviaire. " +
-                                      "Extrais TOUTES les pannes mentionnées et renvoie-les sous forme de JSON pur (sans markdown, sans ```json). " +
-                                      "Format attendu: " +
-                                      '{"pannes": [{"description": "Description concise de la panne 1"}, {"description": "Description de la panne 2"}]} ' +
-                                      "Si plusieurs problèmes sont listés, crée une entrée pour chacun. " +
-                                      "Si aucune panne n'est détectable, renvoie : {\"pannes\": []}"
-                            },
-                            { 
-                                inline_data: { 
-                                    mime_type: mimeType,
-                                    data: base64Image 
-                                } 
-                            }
-                        ]
-                    }]
-                };
-                
-                // 5. On envoie la requête à Google Gemini
-                console.log("🚀 Envoi à l'IA Gemini...");
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-                
-                console.log("📡 Réponse HTTP:", response.status, response.statusText);
-                
-                // On récupère la réponse complète (même en cas d'erreur)
-                const data = await response.json();
-                console.log("📄 Données reçues:", data);
-                
-                if (!response.ok) {
-                    // Si l'API retourne une erreur, on affiche le détail
-                    const errorMsg = data.error?.message || JSON.stringify(data);
-                    throw new Error(`Erreur API ${response.status}: ${errorMsg}`);
+        try {
+            // 2. Convertir tous les fichiers en Base64
+            console.log("📦 Conversion des fichiers en base64...");
+            const filesData = await Promise.all(files.map(file => convertFileToBase64(file)));
+            
+            console.log(`✅ ${filesData.length} fichier(s) converti(s)`);
+            filesData.forEach((data, i) => {
+                console.log(`  ${i+1}. Type: ${data.mimeType}, Taille: ${(data.base64.length / 1024).toFixed(2)}KB`);
+            });
+            
+            // 3. Configuration de l'API Gemini
+            const API_KEY = "AIzaSyAZqibbldEwp9AvmGGl4YhOBgfiKRyPEiY";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+            
+            // 4. Préparer le payload avec TOUS les fichiers
+            const parts = [
+                { 
+                    text: "Analyse ces feuilles de prévisite SNCF de maintenance ferroviaire (il peut y avoir plusieurs images/pages). " +
+                          "Extrais TOUTES les pannes mentionnées sur TOUTES les feuilles et renvoie-les sous forme de JSON pur (sans markdown, sans ```json). " +
+                          "Format attendu: " +
+                          '{"pannes": [{"description": "Description concise de la panne 1"}, {"description": "Description de la panne 2"}]} ' +
+                          "Si plusieurs problèmes sont listés sur les différentes feuilles, crée une entrée pour chacun. " +
+                          "Si aucune panne n'est détectable, renvoie : {\"pannes\": []}"
                 }
+            ];
+            
+            // Ajouter tous les fichiers convertis
+            filesData.forEach(fileData => {
+                parts.push({
+                    inline_data: {
+                        mime_type: fileData.mimeType,
+                        data: fileData.base64
+                    }
+                });
+            });
+            
+            const payload = {
+                contents: [{
+                    parts: parts
+                }]
+            };
+            
+            // 5. On envoie UNE SEULE requête à Google Gemini avec tous les fichiers
+            console.log(`🚀 Envoi de ${filesData.length} fichier(s) à l'IA Gemini en 1 seule requête...`);
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            
+            console.log("📡 Réponse HTTP:", response.status, response.statusText);
+            
+            // On récupère la réponse complète (même en cas d'erreur)
+            const data = await response.json();
+            console.log("📄 Données reçues:", data);
+            
+            if (!response.ok) {
+                const errorMsg = data.error?.message || JSON.stringify(data);
+                throw new Error(`Erreur API ${response.status}: ${errorMsg}`);
+            }
+            
+            // 6. On récupère le texte analysé par l'IA
+            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                let textIA = data.candidates[0].content.parts[0].text;
                 
-                // 6. On récupère le texte analysé par l'IA
-                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                    let textIA = data.candidates[0].content.parts[0].text;
+                console.log("✅ Texte brut reçu:", textIA);
+                
+                // Nettoie le texte (enlève les ```json si présents)
+                textIA = textIA.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                try {
+                    // Parse le JSON
+                    const result = JSON.parse(textIA);
                     
-                    console.log("✅ Texte brut reçu:", textIA);
-                    
-                    // Nettoie le texte (enlève les ```json si présents)
-                    textIA = textIA.replace(/```json/g, '').replace(/```/g, '').trim();
-                    
-                    try {
-                        // Parse le JSON
-                        const result = JSON.parse(textIA);
-                        
-                        if (!result.pannes || result.pannes.length === 0) {
-                            alert("❌ Aucune panne détectée sur cette feuille !\n\nEssaie avec une photo plus nette ou une vraie feuille de prévisite.");
-                            return;
-                        }
-                        
-                        console.log(`✅ ${result.pannes.length} panne(s) détectée(s)`);
-                        
-                        // Lance le système de popup pour valider chaque panne
-                        showPannesPopup(result.pannes);
-                        
-                    } catch (parseError) {
-                        console.error("❌ Erreur parsing JSON:", parseError);
-                        console.log("Texte brut qui a causé l'erreur:", textIA);
-                        
-                        // Fallback: on met tout le texte dans le champ comme avant
-                        const commentField = document.getElementById('repaComment');
-                        commentField.value = "🤖 [SCAN AUTO]\n" + textIA;
-                        commentField.style.backgroundColor = "#e8f5e9";
-                        setTimeout(() => { commentField.style.backgroundColor = ""; }, 2000);
-                        
-                        alert("⚠️ L'IA n'a pas renvoyé un format structuré.\n\nJ'ai mis le texte brut dans le champ, vérifie et complète !");
+                    if (!result.pannes || result.pannes.length === 0) {
+                        alert(`❌ Aucune panne détectée dans les ${files.length} fichier(s) !\n\nEssaie avec des photos plus nettes ou des vraies feuilles de prévisite.`);
+                        return;
                     }
                     
-                } else {
-                    console.error("❌ Réponse inattendue:", data);
-                    throw new Error("L'IA n'a pas renvoyé de texte. Réessaie avec une photo plus nette.");
+                    console.log(`✅ ${result.pannes.length} panne(s) détectée(s) dans ${files.length} fichier(s) !`);
+                    alert(`🎉 SCAN RÉUSSI !\n\n${result.pannes.length} panne(s) détectée(s) dans ${files.length} fichier(s).\n\nTu vas pouvoir les valider une par une !`);
+                    
+                    // Lance le système de popup pour valider chaque panne
+                    showPannesPopup(result.pannes);
+                    
+                } catch (parseError) {
+                    console.error("❌ Erreur parsing JSON:", parseError);
+                    console.log("Texte brut qui a causé l'erreur:", textIA);
+                    
+                    // Fallback: on met tout le texte dans le champ comme avant
+                    const commentField = document.getElementById('repaComment');
+                    commentField.value = "🤖 [SCAN AUTO - " + files.length + " fichier(s)]\n" + textIA;
+                    commentField.style.backgroundColor = "#e8f5e9";
+                    setTimeout(() => { commentField.style.backgroundColor = ""; }, 2000);
+                    
+                    alert("⚠️ L'IA n'a pas renvoyé un format structuré.\n\nJ'ai mis le texte brut dans le champ, vérifie et complète !");
                 }
                 
-            } catch (error) {
-                console.error("❌ ERREUR COMPLÈTE:", error);
-                
-                // Message d'erreur détaillé pour débugger
-                let errorMsg = "ERREUR : " + error.message;
-                
-                if (error.message.includes("403")) {
-                    errorMsg += "\n\n💡 Ta clé API n'a peut-être pas les permissions. Vérifie sur aistudio.google.com";
-                } else if (error.message.includes("429")) {
-                    errorMsg += "\n\n💡 Quota dépassé. Attends un peu ou crée une nouvelle clé.";
-                } else if (error.message.includes("400")) {
-                    errorMsg += "\n\n💡 Image trop lourde ou format invalide. Essaie une photo plus petite.";
-                }
-                
-                alert("❌ " + errorMsg);
-            } finally {
-                // On cache le loader dans tous les cas
-                document.getElementById('scan-loading').style.display = 'none';
-                // On reset l'input pour pouvoir re-scanner
-                fileInput.value = "";
+            } else {
+                console.error("❌ Réponse inattendue:", data);
+                throw new Error("L'IA n'a pas renvoyé de texte. Réessaie avec des photos plus nettes.");
             }
-        };
-        
-        reader.onerror = function() {
-            console.error("❌ Erreur lecture fichier");
-            alert("❌ Impossible de lire l'image !");
+            
+        } catch (error) {
+            console.error("❌ ERREUR COMPLÈTE:", error);
+            
+            let errorMsg = "ERREUR : " + error.message;
+            
+            if (error.message.includes("403")) {
+                errorMsg += "\n\n💡 Ta clé API n'a peut-être pas les permissions. Vérifie sur aistudio.google.com";
+            } else if (error.message.includes("429")) {
+                errorMsg += "\n\n💡 Quota dépassé. Attends 1 minute ou attends demain pour le quota journalier.";
+            } else if (error.message.includes("400")) {
+                errorMsg += "\n\n💡 Fichiers trop lourds ou format invalide. Essaie avec moins de fichiers ou des photos plus petites.";
+            }
+            
+            alert("❌ " + errorMsg);
+            
+        } finally {
+            // On cache le loader dans tous les cas
             document.getElementById('scan-loading').style.display = 'none';
-        };
+            document.getElementById('scan-loading').innerHTML = '⏳ Analyse en cours par l\'IA... Patiente Pélo !';
+            // On reset l'input pour pouvoir re-scanner
+            fileInput.value = "";
+        }
+    }
+    
+    /**
+     * Fonction utilitaire pour convertir un fichier (image ou PDF) en Base64
+     */
+    function convertFileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = function() {
+                // On récupère le type MIME
+                const mimeType = file.type || "application/octet-stream";
+                
+                // On enlève l'en-tête "data:image/jpeg;base64," pour garder juste les données
+                const base64 = reader.result.split(',')[1];
+                
+                resolve({
+                    mimeType: mimeType,
+                    base64: base64,
+                    fileName: file.name
+                });
+            };
+            
+            reader.onerror = function() {
+                reject(new Error(`Impossible de lire le fichier ${file.name}`));
+            };
+            
+            reader.readAsDataURL(file);
+        });
     }
     
     // On lance l'initialisation dès que la page est chargée
@@ -3672,4 +3701,4 @@
 </div>
 
 </body>
-</html>
+            </html>
